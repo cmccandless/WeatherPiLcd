@@ -8,6 +8,7 @@ import requests
 import thread
 import signal
 import threading
+import netifaces as ni
 
 req = None
 lcd = None
@@ -106,23 +107,41 @@ def displayData():
       lcd.lcd_display_string(strftime('%H:%M:%S CST',now),1)
       lcd.lcd_display_string(strftime("%a %b %d, %Y",now),2)
     elif state == 1:
+      scrollLength = 16
+      try:
+        lcd.lcd_display_string(ni.ifaddresses('wlan0')[2][0]['addr'],1)
+      except KeyError:
+        errStr = 'wlan0 not connected'
+        localScroll = scrollPos % (len(errStr)-scrollLength+1)
+        lcd.lcd_display_string(errStr[localScroll:localScroll+scrollLength],1)
+      try:
+        lcd.lcd_display_string(ni.ifaddresses('eth0')[2][0]['addr'],2)
+      except KeyError:
+        errStr = 'eth0 not connected'
+        localScroll = scrollPos % (len(errStr)-scrollLength+1)
+        lcd.lcd_display_string(errStr[localScroll:localScroll+scrollLength],2)
+    elif state == 2:
       scrollLength = 8
       lcd.lcd_display_string(city,1)
-      conditionStr = conditions[scrollPos:scrollPos+scrollLength]
+      localScroll = scrollPos % (len(conditions)+1)
+      conditionStr = conditions[localScroll:localScroll+scrollLength]
       lcd.lcd_display_string((conditionStr+",").ljust(scrollLength+1),2)
       lcd.lcd_display_string_pos('{}{}'.format(currentTemp,chr(223)).rjust(4),2,9)
       displayImage(images[image],13)
-      if len(conditions) > scrollLength:
-        scrollPos = (scrollPos + 1) % (len(conditions)+1)
-    elif state == 2:
+    elif state == 3:
       lcd.lcd_display_string('Wind:{:4.1f}kn'.format(windSpeed),1)
       lcd.lcd_display_string_pos('{}{}'.format(windDeg,chr(223)),1,12)
       lcd.lcd_display_string('Clouds: {}%'.format(clouds),2)
 
+    scrollPos += 1
+
     sleep(1)
     
-    if canDisplayWeather and currentTime - lastStateChange > 10:
-      state = (state + 1) % 3
+    if currentTime - lastStateChange > 10:
+      if canDisplayWeather:
+        state = (state + 1) % 4
+      else:
+        state = (state + 1) % 2
       scrollPos = 0
       lcd.lcd_clear()
       lastStateChange = currentTime
