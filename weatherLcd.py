@@ -14,6 +14,13 @@ req = None
 lcd = None
 go = True
 lastUpdate = 0
+updateInterval = 60 * 5 #minutes 
+
+cityid = '4919987' #Elkhart
+#cityid = '4707814' #Longview
+appid = 'a7edc6f3527194353d5dcbcbbf679fe0'
+url = 'http://api.openweathermap.org/data/2.5/weather?id={}&appid={}&units=imperial'.format(cityid,appid)
+mphToKnots = 0.868976
 
 def displayImage(image, xpos=0):
   lcd.lcd_load_custom_chars(image)
@@ -55,8 +62,6 @@ def shutdown():
   return
   
 def displayData():
-  updateInterval = 1800
-
   weatherDetails = None
   weatherMain = None
   wind = None
@@ -104,27 +109,34 @@ def displayData():
 
     if state == 0:
       now = localtime()
-      lcd.lcd_display_string(strftime('%H:%M:%S CST',now),1)
+      lcd.lcd_display_string(strftime('%H:%M:%S %Z',now),1)
       lcd.lcd_display_string(strftime("%a %b %d, %Y",now),2)
     elif state == 1:
       scrollLength = 16
+      lcd.lcd_clear()
+      space = ''
+      for n in range(1,18):
+        space = space + ' '
+      scrollRate = 3
       try:
         lcd.lcd_display_string(ni.ifaddresses('wlan0')[2][0]['addr'],1)
       except KeyError:
-        errStr = 'wlan0 not connected'
-        localScroll = scrollPos % (len(errStr)-scrollLength+1)
+        errStr = 'wlan0 not connected' + space
+        localScroll = (scrollRate * scrollPos) % (len(errStr)-scrollLength+1)
         lcd.lcd_display_string(errStr[localScroll:localScroll+scrollLength],1)
       try:
         lcd.lcd_display_string(ni.ifaddresses('eth0')[2][0]['addr'],2)
       except KeyError:
-        errStr = 'eth0 not connected'
-        localScroll = scrollPos % (len(errStr)-scrollLength+1)
+        errStr = 'eth0 not connected' + space
+        localScroll = (scrollRate * scrollPos) % (len(errStr)-scrollLength+1)
         lcd.lcd_display_string(errStr[localScroll:localScroll+scrollLength],2)
     elif state == 2:
       scrollLength = 8
       lcd.lcd_display_string(city,1)
       localScroll = scrollPos % (len(conditions)+1)
-      conditionStr = conditions[localScroll:localScroll+scrollLength]
+      conditionStr = conditions
+      if len(conditionStr)>scrollLength:
+        conditionStr = conditions[localScroll:localScroll+scrollLength]
       lcd.lcd_display_string((conditionStr+",").ljust(scrollLength+1),2)
       lcd.lcd_display_string_pos('{}{}'.format(currentTemp,chr(223)).rjust(4),2,9)
       displayImage(images[image],13)
@@ -145,6 +157,7 @@ def displayData():
       scrollPos = 0
       lcd.lcd_clear()
       lastStateChange = currentTime
+      scrollPos = 0
 
   return
 
@@ -157,11 +170,6 @@ lcd = rpi_i2c_driver.lcd()
 if lcd == None:
   print("No I2C LCD detected!")
   sys.exit(0)
-
-cityid = '4707814'
-appid = 'a7edc6f3527194353d5dcbcbbf679fe0'
-url = 'http://api.openweathermap.org/data/2.5/weather?id={}&appid={}&units=imperial'.format(cityid,appid)
-mphToKnots = 0.868976
 
 images = {
 '01d' : [
