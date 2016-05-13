@@ -10,15 +10,25 @@ import signal
 import threading
 import netifaces as ni
 
+reqInProgress = False
 req = None
 lcd = None
 go = True
 lastUpdate = 0
-updateInterval = 60 * 5 #minutes 
 
-cityid = '4919987' #Elkhart
-#cityid = '4707814' #Longview
+#Weather Update Interval
+updateInterval = 5 #minutes
+updateInterval *= 60 #convert to seconds 
+
+stateLength = 10 #seconds
+
+#Settings
+cityIds = {'Elkhart':4919987,
+           'Longview':4707814}
+cityid = cityIds['Elkhart']
 appid = 'a7edc6f3527194353d5dcbcbbf679fe0'
+
+#Constants
 url = 'http://api.openweathermap.org/data/2.5/weather?id={}&appid={}&units=imperial'.format(cityid,appid)
 mphToKnots = 0.868976
 
@@ -37,12 +47,29 @@ def displayImage(image, xpos=0):
 def requestWeatherData():
   global req
   global lastUpdate
+  global reqInProgress
+  if reqInProgress:
+    return
+  reqInProgress = True
   try:
     req = requests.get(url)
     lastUpdate = time()
   except requests.exceptions.ConnectionError as e:
     print e
+  finally:
+    reqInProgress = False
   return
+
+def scrollAdjustStr(str,scrollLength,scrollPos,spacing):
+  if len(str)<=scrollLength:
+    return str.ljust(scrollLength)
+  shortStr = str
+  pos = scrollPos % (len(str) + spacing)
+  for i in range(0,spacing):
+    shortStr = shortStr + ' '
+  else:  
+    shortStr = shortStr[pos:pos+scrollLength]
+    return shortStr + str[:scrollLength-len(shortStr)]
 
 def shutdown():
   global go
@@ -112,33 +139,29 @@ def displayData():
       lcd.lcd_display_string(strftime('%H:%M:%S %Z',now),1)
       lcd.lcd_display_string(strftime("%a %b %d, %Y",now),2)
     elif state == 1:
-      scrollLength = 16
       lcd.lcd_clear()
-      space = ''
-      for n in range(1,18):
-        space = space + ' '
+      scrollLength = 16
       scrollRate = 3
+      spacing = scrollLength/2
       try:
         lcd.lcd_display_string(ni.ifaddresses('wlan0')[2][0]['addr'],1)
       except KeyError:
-        errStr = 'wlan0 not connected' + space
-        localScroll = (scrollRate * scrollPos) % (len(errStr)-scrollLength+1)
-        lcd.lcd_display_string(errStr[localScroll:localScroll+scrollLength],1)
+        errStr = 'wlan0 not connected'
+        lcd.lcd_display_string(scrollAdjustStr(errStr,scrollLengthscrollPos*scrollRate,spacing),1)
       try:
         lcd.lcd_display_string(ni.ifaddresses('eth0')[2][0]['addr'],2)
       except KeyError:
-        errStr = 'eth0 not connected' + space
-        localScroll = (scrollRate * scrollPos) % (len(errStr)-scrollLength+1)
-        lcd.lcd_display_string(errStr[localScroll:localScroll+scrollLength],2)
+        errStr = 'eth0 not connected'
+        lcd.lcd_display_string(scrollAdjustStr(errStr,scrollLength,scrollPos*scrollRate,spacing),2)
     elif state == 2:
-      scrollLength = 8
-      lcd.lcd_display_string(city,1)
-      localScroll = scrollPos % (len(conditions)+1)
-      conditionStr = conditions
-      if len(conditionStr)>scrollLength:
-        conditionStr = conditions[localScroll:localScroll+scrollLength]
-      lcd.lcd_display_string((conditionStr+",").ljust(scrollLength+1),2)
-      lcd.lcd_display_string_pos('{}{}'.format(currentTemp,chr(223)).rjust(4),2,9)
+      scrollLength = 9
+      scrollRate = 4
+      spacing = scrollLength*2/3
+      city = 'Rancho Santa Margarita'
+      lcd.lcd_display_string(scrollAdjustStr(city,13,scrollPos*scrollRate,6),1)
+      conditionStr = scrollAdjustStr(conditions+',',scrollLength,scrollPos*scrollRate,spacing)
+      lcd.lcd_display_string(conditionStr,2)
+      lcd.lcd_display_string_pos('{}{}'.format(currentTemp,chr(223)).rjust(4),2,scrollLength)
       displayImage(images[image],13)
     elif state == 3:
       lcd.lcd_display_string('Wind:{:4.1f}kn'.format(windSpeed),1)
@@ -149,7 +172,7 @@ def displayData():
 
     sleep(1)
     
-    if currentTime - lastStateChange > 10:
+    if currentTime - lastStateChange > stateLength:
       if canDisplayWeather:
         state = (state + 1) % 4
       else:
