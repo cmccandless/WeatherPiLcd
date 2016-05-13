@@ -157,7 +157,6 @@ def displayData():
       scrollLength = 9
       scrollRate = 4
       spacing = scrollLength*2/3
-      city = 'Rancho Santa Margarita'
       lcd.lcd_display_string(scrollAdjustStr(city,13,scrollPos*scrollRate,6),1)
       conditionStr = scrollAdjustStr(conditions+',',scrollLength,scrollPos*scrollRate,spacing)
       lcd.lcd_display_string(conditionStr,2)
