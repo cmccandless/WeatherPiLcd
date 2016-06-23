@@ -9,6 +9,7 @@ import thread
 import signal
 import threading
 import netifaces as ni
+from lxml import html
 
 reqInProgress = False
 req = None
@@ -23,13 +24,15 @@ updateInterval *= 60 #convert to seconds
 stateLength = 10 #seconds
 
 #Settings
-cityIds = {'Elkhart':4919987,
-           'Longview':4707814}
-cityid = cityIds['Elkhart']
 appid = 'a7edc6f3527194353d5dcbcbbf679fe0'
 
+#Location
+ipinfo = {}
+ipinfoUrl = 'http://www.ipinfodb.com/my_ip_location.php'
+
 #Constants
-url = 'http://api.openweathermap.org/data/2.5/weather?id={}&appid={}&units=imperial'.format(cityid,appid)
+zip = 'Zip or postal code'
+url = 'http://api.openweathermap.org/data/2.5/weather?zip={},us&appid={}&units=imperial'.format('{}',appid)
 mphToKnots = 0.868976
 
 def displayImage(image, xpos=0):
@@ -44,6 +47,15 @@ def displayImage(image, xpos=0):
   lcd.lcd_write_char(5)
   return
 
+def requestIpInfo():
+  ipinfoPage = requests.get(ipinfoUrl)
+  ipinfoTree = html.fromstring(ipinfoPage.content)
+  for v in ipinfoTree.xpath('//div[@class="section"]/ul/li'):
+    sp = v.text.split(' : ')
+    if sp[0]=='IP address':
+      sp[1]=v.xpath('//strong/text()')[0]
+    ipinfo[sp[0]]=sp[1]
+
 def requestWeatherData():
   global req
   global lastUpdate
@@ -52,8 +64,14 @@ def requestWeatherData():
     return
   reqInProgress = True
   try:
-    req = requests.get(url)
+    req = requests.get(url.format(ipinfo[zip]))
     lastUpdate = time()
+  except KeyError:
+    try:
+      requestIpInfo()
+      requestWeatherData()
+    except requests.exceptions.ConnectionError as e:
+      print e
   except requests.exceptions.ConnectionError as e:
     print e
   finally:
@@ -128,6 +146,9 @@ def displayData():
           humidity = int(weatherMain['humidity'])
           windSpeed = round(float(wind['speed'])*mphToKnots,1)
           windDeg = int(float(wind['deg'])+0.5)
+        except KeyError as e:
+          print(e)
+          state = 0
         except ValueError as e:
           print(e)
           state = 0
